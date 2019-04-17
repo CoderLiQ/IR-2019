@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
+using DataRetrieval.DbProvider;
+using DataRetrieval.Models;
 using Microsoft.AspNetCore.Mvc;
 using RestSharp;
 using ScrapySharp.Extensions;
@@ -11,46 +14,93 @@ namespace DataRetrieval.Controllers
 {
     public class ScrapingController : Controller
     {
+        private readonly PostgreSqlDbProvider dbProvider;
         private readonly IRestClient imdbClient;
 
-        public ScrapingController(IRestClient imdbClient)
+        public ScrapingController(IRestClient imdbClient, PostgreSqlDbProvider dbProvider)
         {
             this.imdbClient = imdbClient;
+            this.dbProvider = dbProvider;
         }
 
-//        public async Task<IEnumerable<IActionResult>> GetFilmsInfoFromImdb(IEnumerable<int> ids, int count = 10)
-//        {
-//            var results = new List<{}>();
-//            foreach (var id in ids.Take(count))
-//                await GetSingleFilmInfoFromImdb(id.ToString()).ConfigureAwait(false);
-//        }
-
-
-        public async Task<IActionResult> GetSingleFilmInfoFromImdb(string filmId = "4743226")
+        public async Task<IEnumerable<ExtendedMovieInfoDto>> GetFilmsInfoFromImdb(bool takeFromDb, int count = 2)
         {
-            var document = HDocument.Parse(
-                (await imdbClient
-                    .ExecuteTaskAsync(new RestRequest($"title/tt{filmId}/")).ConfigureAwait(false))
-                .Content);
+            var movies = await dbProvider.GetRowsAsync("movies", count: count).ConfigureAwait(false);
 
-            var (name, year) = ExtractNameAndYear(document);
-            var rating = ExtractRating(document);
-            var date = ExtractDate(document);
-            var genres = ExtractGenres(document);
-            var director = ExtractDirector(document);
-            var stars = ExtractStars(document);
-            var storyLine = ExtractStoryLine(document);
-            var synopsis = await ExtractSynopsis(document, imdbClient).ConfigureAwait(false);
+            var res = new List<ExtendedMovieInfoDto>();
+            foreach (var movie in movies)
+            {
+                var extendedMovieInfoDto = await GetSingleFilmInfoFromImdb(formatImdbId(movie["id"].ToString())).ConfigureAwait(false);
+                if(extendedMovieInfoDto != null)
+                    res.Add(extendedMovieInfoDto);
+            }
 
-            var data = new {rating, name, year, date, genres, direc = director, stars, storyLine, synopsis};
-//            return data;
-            return Json(data);
+            return res;
         }
 
-        private static (string name, string year) ExtractNameAndYear(HDocument document)
+        private string formatImdbId(string Id)
+        {
+            var idRequiredLength = 7;
+
+            if (Id.Length < idRequiredLength)
+            {
+                var missing = idRequiredLength - Id.Length;
+
+                return Id.Insert(0, new string('0', missing));
+            }
+
+            return Id;
+        }
+
+        public async Task<ExtendedMovieInfoDto> GetSingleFilmInfoFromImdb(string filmId = "4743226")
+        {
+            try
+            {
+                var document = HDocument.Parse(
+                    (await imdbClient
+                        .ExecuteTaskAsync(new RestRequest($"title/tt{filmId}/")).ConfigureAwait(false))
+                    .Content);
+
+                var (name, year) = ExtractNameAndYear(document);
+                var rating = ExtractRating(document);
+                var date = ExtractDate(document);
+                var genres = ExtractGenres(document);
+                var director = ExtractDirector(document);
+                var stars = ExtractStars(document);
+                var storyLine = ExtractStoryLine(document);
+                var synopsis = await ExtractSynopsis(document, imdbClient).ConfigureAwait(false);
+
+                return new ExtendedMovieInfoDto
+                {
+                    Id = filmId,
+                    Name = name,
+                    Year = year,
+                    Rating = rating,
+                    PremiereDate = date,
+                    Genres = genres.ToArray(),
+                    Director = director,
+                    Stars = stars.ToArray(),
+                    StoryLine = storyLine,
+                    Synopsis = synopsis
+                };
+            }
+            catch (Exception e)
+            {
+                return null;
+            }
+        }
+
+        private static (string name, int? year) ExtractNameAndYear(HDocument document)
         {
             var nameAndYear = document.CssSelect(".title_wrapper>h1").Single();
-            return (nameAndYear.Children[0].InnerText.Replace("&nbsp", " ").Trim(), nameAndYear.Children[1].InnerText);
+            int.TryParse(nameAndYear.Children[1].InnerText, out var year);
+
+            var name = nameAndYear.Children[0].InnerText.Replace("&nbsp", " ").Trim();
+
+            if (name == "" || year == default(int))
+                throw new ArgumentException();
+
+            return (name, year);
         }
 
         private static string ExtractStoryLine(HDocument document)
@@ -109,7 +159,7 @@ namespace DataRetrieval.Controllers
             }
         }
 
-        private static string ExtractDate(HDocument document)
+        private static DateTime? ExtractDate(HDocument document)
         {
             try
             {
@@ -117,23 +167,27 @@ namespace DataRetrieval.Controllers
                     .Single(e => e.InnerText == "Release Date:");
                 var date = dateTitle.ParentNode.Children[2].InnerText;
                 date = date.Substring(0, date.LastIndexOf("(", StringComparison.Ordinal)).Trim();
-                return date;
+                return Convert.ToDateTime(date);
             }
             catch
             {
-                return "";
+                return null;
             }
         }
 
-        private static string ExtractRating(HDocument document)
+        private static float? ExtractRating(HDocument document)
         {
             try
             {
-                return document.CssSelect(".ratings_wrapper .imdbRating .ratingValue strong span").Single().InnerText;
+                var readOnlySpan = document.CssSelect(".ratings_wrapper .imdbRating .ratingValue strong span").Single()
+                    .InnerText;
+                float.TryParse(readOnlySpan, NumberStyles.Any, CultureInfo.InvariantCulture.NumberFormat,
+                    out var rating);
+                return rating == 0 ? (float?) null : rating;
             }
             catch (Exception)
             {
-                return "";
+                return null;
             }
         }
 

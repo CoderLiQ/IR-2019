@@ -61,7 +61,7 @@ namespace DataRetrieval
             {
                 routes.MapRoute(
                     name: "default",
-                    template: "{controller=Home}/{action=Lab1}/{id?}");
+                    template: "{controller=Scraping}/{action=GetSingleFilmInfoFromImdb}/{id?}");
             });
         }
     }
