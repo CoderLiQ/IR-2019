@@ -31,7 +31,7 @@ namespace DataRetrieval.Controllers
         {
             try
             {
-                var rawData = await ReadAsListAsync(file);
+                var rawData = await ReadAsListAsync(file).ConfigureAwait(false);
 
                 rawData.RemoveAt(0);
 
@@ -56,8 +56,8 @@ namespace DataRetrieval.Controllers
 
                 }
 
-                await context.AddRangeAsync(movies);
-                await context.SaveChangesAsync();
+                await context.AddRangeAsync(movies).ConfigureAwait(false);
+                await context.SaveChangesAsync().ConfigureAwait(false);
                 return Json(movies.Count);
             }
             catch (Exception e)
@@ -72,7 +72,7 @@ namespace DataRetrieval.Controllers
             using (var reader = new StreamReader(file.OpenReadStream()))
             {
                 while (reader.Peek() >= 0)
-                    result.Add(await reader.ReadLineAsync());
+                    result.Add(await reader.ReadLineAsync().ConfigureAwait(false));
             }
             return result;
         }

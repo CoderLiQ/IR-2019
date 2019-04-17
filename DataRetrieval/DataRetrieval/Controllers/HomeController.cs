@@ -37,7 +37,7 @@ namespace DataRetrieval.Controllers
 
         public async Task<IActionResult> TestGetAllRowsFromMovies()
         {
-            var x = await dbProvider.GetRowsAsync("movies");
+            var x = await dbProvider.GetRowsAsync("movies").ConfigureAwait(false);
 
             return Json(x);
         }
@@ -62,7 +62,7 @@ namespace DataRetrieval.Controllers
 
                 var yearCondition = year == 0 ? "" : $"OR year = {year}";
                 var result =
-                    await dbProvider.GetRowsAsync(condition: $"name ~~* '%{query}%' {yearCondition}", count: 10);
+                    await dbProvider.GetRowsAsync(condition: $"name ~~* '%{query}%' {yearCondition}", count: 10).ConfigureAwait(false);
 
                 return Json(result);
             }

@@ -20,7 +20,7 @@ namespace DataRetrieval
         public void InitLucy()
         {
             if (!isInitialized)
-                using (var conn = new NpgsqlConnection("Host=84.201.147.162;Port=5432;Database=CoderLiQ;Username=developer;Password=rtfP@ssw0rd"))
+                using (var conn = new NpgsqlConnection("Host=db.mirvoda.com;Port=5454;Database=CoderLiQ;Username=developer;Password=rtfP@ssw0rd"))
                 {
                     conn.Open();
 

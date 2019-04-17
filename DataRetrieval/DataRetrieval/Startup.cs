@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RestSharp;
 
 namespace DataRetrieval
 {
@@ -33,6 +34,7 @@ namespace DataRetrieval
 
             services.AddSingleton<PostgreSqlDbProvider>();
             services.AddSingleton<LucyAdapter>();
+            services.AddSingleton<IRestClient>(new RestClient("https://www.imdb.com"));
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
         }
@@ -59,7 +61,7 @@ namespace DataRetrieval
             {
                 routes.MapRoute(
                     name: "default",
-                    template: "{controller=Home}/{action=Lab1}/{id?}");
+                    template: "{controller=Scraping}/{action=GetSingleFilmInfoFromImdb}/{id?}");
             });
         }
     }

@@ -9,7 +9,7 @@ namespace DataRetrieval.DbProvider
         private readonly string connectionString;
 
         public PostgreSqlDbProvider(
-            string connectionString = "Host=84.201.147.162;Port=5432;Database=CoderLiQ;Username=developer;Password=rtfP@ssw0rd")
+            string connectionString = "Host=db.mirvoda.com;Port=5454;Database=CoderLiQ;Username=developer;Password=rtfP@ssw0rd")
         {
             this.connectionString = connectionString;
         }
@@ -21,13 +21,13 @@ namespace DataRetrieval.DbProvider
 
             using (var conn = new NpgsqlConnection(connectionString))
             {
-                await conn.OpenAsync();
+                await conn.OpenAsync().ConfigureAwait(false);
                 // Retrieve all rows
                 using (var cmd = new NpgsqlCommand(command, conn))
                 {
-                    using (var reader = await cmd.ExecuteReaderAsync())
+                    using (var reader = await cmd.ExecuteReaderAsync().ConfigureAwait(false))
                     {
-                        while (await reader.ReadAsync())
+                        while (await reader.ReadAsync().ConfigureAwait(false))
                         {
 //                            var objs = new object[reader.FieldCount];
 //                            reader.GetValues(objs);
@@ -50,7 +50,7 @@ namespace DataRetrieval.DbProvider
         public async Task<IEnumerable<Dictionary<string, object>>> GetRowsAsync(string tableName = "movies", string fields = "*", string condition = "true", int count = int.MaxValue)
         {
             var command = $"SELECT {fields} FROM {tableName} WHERE {condition} LIMIT {count}";
-            return await ExecuteReadSqlCommandAsync(command);
+            return await ExecuteReadSqlCommandAsync(command).ConfigureAwait(false);
         }
     }
 
