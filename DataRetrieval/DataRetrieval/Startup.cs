@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RestSharp;
 
 namespace DataRetrieval
 {
@@ -33,6 +34,7 @@ namespace DataRetrieval
 
             services.AddSingleton<PostgreSqlDbProvider>();
             services.AddSingleton<LucyAdapter>();
+            services.AddSingleton<IRestClient>(new RestClient("https://www.imdb.com"));
 
             services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_2);
         }
