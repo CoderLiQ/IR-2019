@@ -18,7 +18,15 @@ namespace DataRetrieval.Controllers
             this.imdbClient = imdbClient;
         }
 
-        public async Task<IActionResult> GetFilmInfoFromImdb(string filmId = "4743226")
+//        public async Task<IEnumerable<IActionResult>> GetFilmsInfoFromImdb(IEnumerable<int> ids, int count = 10)
+//        {
+//            var results = new List<{}>();
+//            foreach (var id in ids.Take(count))
+//                await GetSingleFilmInfoFromImdb(id.ToString()).ConfigureAwait(false);
+//        }
+
+
+        public async Task<IActionResult> GetSingleFilmInfoFromImdb(string filmId = "4743226")
         {
             var document = HDocument.Parse(
                 (await imdbClient
@@ -34,14 +42,16 @@ namespace DataRetrieval.Controllers
             var storyLine = ExtractStoryLine(document);
             var synopsis = await ExtractSynopsis(document, imdbClient).ConfigureAwait(false);
 
-            return Json(new {rating, name, year, date, genres, direc = director, stars, storyLine, synopsis});
+            var data = new {rating, name, year, date, genres, direc = director, stars, storyLine, synopsis};
+//            return data;
+            return Json(data);
         }
 
         private static (string name, string year) ExtractNameAndYear(HDocument document)
         {
             var nameAndYear = document.CssSelect(".title_wrapper>h1").Single();
             return (nameAndYear.Children[0].InnerText.Replace("&nbsp", " ").Trim(), nameAndYear.Children[1].InnerText);
-        } 
+        }
 
         private static string ExtractStoryLine(HDocument document)
         {
@@ -126,6 +136,7 @@ namespace DataRetrieval.Controllers
                 return "";
             }
         }
+
         private static async Task<string> ExtractSynopsis(HDocument document, IRestClient imdbClient)
         {
             try
