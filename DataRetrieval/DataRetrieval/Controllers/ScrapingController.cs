@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using DataRetrieval.DbProvider;
 using DataRetrieval.Models;
 using Microsoft.AspNetCore.Mvc;
+using Npgsql;
 using RestSharp;
 using ScrapySharp.Extensions;
 using ScrapySharp.Html.Dom;
@@ -23,19 +25,82 @@ namespace DataRetrieval.Controllers
             this.dbProvider = dbProvider;
         }
 
-        public async Task<IEnumerable<ExtendedMovieInfoDto>> GetFilmsInfoFromImdb(bool takeFromDb, int count = 2)
+        public async Task<IEnumerable<ExtendedMovieInfoDto>> GetFilmsInfoFromImdb(int count = 5, bool countAll = false)
         {
+            if (countAll)
+                count = int.MaxValue;
+
             var movies = await dbProvider.GetRowsAsync("movies", count: count).ConfigureAwait(false);
 
-            var res = new List<ExtendedMovieInfoDto>();
+            var extendedMovies = new List<ExtendedMovieInfoDto>();
             foreach (var movie in movies)
             {
-                var extendedMovieInfoDto = await GetSingleFilmInfoFromImdb(formatImdbId(movie["id"].ToString())).ConfigureAwait(false);
-                if(extendedMovieInfoDto != null)
-                    res.Add(extendedMovieInfoDto);
+                var extendedMovieInfoDto = await GetSingleFilmInfoFromImdb(formatImdbId(movie["id"].ToString()))
+                    .ConfigureAwait(false);
+                if (extendedMovieInfoDto != null)
+                    extendedMovies.Add(extendedMovieInfoDto);
             }
 
-            return res;
+            return extendedMovies;
+        }
+
+        public async Task<IActionResult> FillExtendedMoviesTable(int count = 5, bool countAll = false)
+        {
+            if (countAll)
+                count = int.MaxValue;
+
+            var getInfoSw = new Stopwatch();
+            getInfoSw.Start();
+            var extendedMovies = await GetFilmsInfoFromImdb(count, countAll).ConfigureAwait(false);
+            getInfoSw.Stop();
+
+
+            var writeDataSw = new Stopwatch();
+            writeDataSw.Start();
+
+            var itemsAdded = 0;
+
+            //todo: вынести в конфиг
+            var connectionString =
+                "Host=db.mirvoda.com;Port=5454;Database=CoderLiQ;Username=developer;Password=rtfP@ssw0rd";
+
+            using (var conn = new NpgsqlConnection(connectionString))
+            {
+                await conn.OpenAsync().ConfigureAwait(false);
+
+                foreach (var movie in extendedMovies)
+                {
+                    try
+                    {
+                        var command =
+                            "INSERT INTO extended_movies (id, name, premiere_date, genres, director, stars, storyline, synopsis, rating) " +
+                            "VALUES (@id, @name, @premiere_date, @genres, @director, @stars, @storyline, @synopsis, @rating)";
+
+                        using (var cmd = new NpgsqlCommand(command, conn))
+                        {
+                            cmd.Parameters.AddWithValue("id", int.Parse(movie.Id));
+                            cmd.Parameters.AddWithValue("name", movie.Name);
+                            cmd.Parameters.AddWithValue("premiere_date", movie.PremiereDate);
+                            cmd.Parameters.AddWithValue("genres", movie.Genres);
+                            cmd.Parameters.AddWithValue("director", movie.Director);
+                            cmd.Parameters.AddWithValue("stars", movie.Stars);
+                            cmd.Parameters.AddWithValue("storyline", movie.StoryLine);
+                            cmd.Parameters.AddWithValue("synopsis", movie.Synopsis);
+                            cmd.Parameters.AddWithValue("rating", movie.Rating);
+
+                            await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
+                            itemsAdded++;
+                        }
+                    }
+                    catch
+                    {
+//                     ignored
+                    }
+                }
+            }
+
+            writeDataSw.Stop();
+            return Json(new { GetDataInSeconds = getInfoSw.Elapsed.Seconds, WriteDataInSeconds = writeDataSw.Elapsed.Seconds, itemsAdded});
         }
 
         private string formatImdbId(string Id)
